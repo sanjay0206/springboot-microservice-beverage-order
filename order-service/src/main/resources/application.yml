@@ -1,0 +1,29 @@
+# closed - UP
+# open - DOWN
+# half-open - UNKNOWN
+
+# Circuit Breaker configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      beverageService:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        permitted-number-of-calls-in-half-open-state: 5
+        wait-duration-in-open-state: 5s
+        automatic-transition-from-open-to-half-open-enabled: true
+        allow-health-indicator-to-fail: true
+        register-health-indicator: true
+
+# Management configuration for health endpoints
+management:
+  health:
+    circuitbreakers:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always

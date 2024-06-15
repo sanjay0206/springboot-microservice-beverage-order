@@ -1,0 +1,12 @@
+server.port=9090
+spring.application.name=api-gateway
+
+server.port=8080
+spring.application.name=order-service
+
+spring.application.name=beverage-service
+server.port=8082
+
+spring.application.name=auth-service
+server.port=8083
+
