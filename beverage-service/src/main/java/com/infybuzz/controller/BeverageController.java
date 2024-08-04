@@ -19,15 +19,15 @@ public class BeverageController {
 
     @PreAuthorize("hasRole('USER')")
     @GetMapping("/getAll")
-    public ResponseEntity<List<Beverage>> getAllBeverages(@RequestHeader(value = "X-Internal-Request", required = false)
-                                                              String requestHeader) {
+    public ResponseEntity<List<Beverage>> getAllBeverages() {
         return ResponseEntity.ok(beverageService.getAllBeverages());
     }
 
     @PreAuthorize("hasRole('USER') or #requestHeader == 'Internal'")
     @GetMapping("/getById/{id}")
     public ResponseEntity<Beverage> getById(@PathVariable long id,
-                                            @RequestHeader(value = "X-Internal-Request", required = false) String requestHeader) {
+                                            @RequestHeader(value = "X-Internal-Request", required = false)
+                                            String requestHeader) {
         return ResponseEntity.ok(beverageService.getById(id));
     }
 
@@ -35,7 +35,8 @@ public class BeverageController {
     @PutMapping("/update-availability/{id}")
     public ResponseEntity<Void> updateBeverageAvailability(@PathVariable("id") Long id,
                                                            @RequestParam("quantity") int quantity,
-                                                           @RequestHeader(value = "X-Internal-Request", required = false) String requestHeader) {
+                                                           @RequestHeader(value = "X-Internal-Request", required = false)
+                                                               String requestHeader) {
         beverageService.updateBeverageAvailability(id, quantity);
         return ResponseEntity.noContent().build();
     }
@@ -48,8 +49,7 @@ public class BeverageController {
 
     @PreAuthorize("hasRole('SHOP_OWNER')")
     @PutMapping("/update/{id}")
-    public ResponseEntity<Beverage> updateBeverage(@PathVariable Long id,
-                                                   @RequestBody CreateBeverageRequest createBeverageRequest) {
+    public ResponseEntity<Beverage> updateBeverage(@PathVariable Long id, @RequestBody CreateBeverageRequest createBeverageRequest) {
         Beverage updatedBeverage = beverageService.updateBeverage(id, createBeverageRequest);
         return ResponseEntity.ok(updatedBeverage);
     }
