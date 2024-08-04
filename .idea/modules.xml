@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/springboot-micro-gateway-beverage.iml" filepath="$PROJECT_DIR$/.idea/springboot-micro-gateway-beverage.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/springboot-microservice-beverage-order.iml" filepath="$PROJECT_DIR$/.idea/springboot-microservice-beverage-order.iml" />
     </modules>
   </component>
 </project>

@@ -1,0 +1,24 @@
+logging:
+  level:
+    org:
+      springframework:
+        security: TRACE
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: auth
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/auth/**
+
+        - id: beverage
+          uri: lb://beverage-service
+          predicates:
+            - Path=/api/beverage/**
+
+        - id: order
+          uri: lb://order-service
+          predicates:
+            - Path=/api/order/**
