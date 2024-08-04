@@ -14,7 +14,6 @@ public class AuthService {
     UserCredRepository repository;
     @Autowired
     PasswordEncoder passwordEncoder;
-
     @Autowired
     JwtService jwtService;
 

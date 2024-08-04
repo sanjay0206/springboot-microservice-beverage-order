@@ -27,3 +27,17 @@ management:
   endpoint:
     health:
       show-details: always
+
+logging:
+  level:
+    org:
+      springframework:
+        security: TRACE
+
+spring:
+  security:
+    oauth2:
+      resource-server:
+        jwt:
+          issuer-uri: http://localhost:8083/api/auth
+          jwk-set-uri: http://localhost:8083/api/auth/.well-known/jwks.json

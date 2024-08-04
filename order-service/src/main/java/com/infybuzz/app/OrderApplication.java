@@ -22,7 +22,7 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 
 @SpringBootApplication
-@ComponentScan({"com.infybuzz.controller", "com.infybuzz.service", "com.infybuzz.exceptions"})
+@ComponentScan({"com.infybuzz.controller", "com.infybuzz.service", "com.infybuzz.security", "com.infybuzz.exceptions"})
 @EntityScan("com.infybuzz.entity")
 @EnableJpaRepositories("com.infybuzz.repository")
 @EnableFeignClients("com.infybuzz.feignclients")

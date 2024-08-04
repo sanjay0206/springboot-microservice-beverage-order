@@ -7,6 +7,8 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.cloud.bootstrap.encrypt.RsaProperties;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -17,10 +19,11 @@ import java.util.Arrays;
 import java.util.List;
 
 @SpringBootApplication
-@ComponentScan({"com.infybuzz.controller", "com.infybuzz.service"})
+@ComponentScan({"com.infybuzz.controller", "com.infybuzz.service", "com.infybuzz.security"})
 @EntityScan("com.infybuzz.entity")
 @EnableJpaRepositories("com.infybuzz.repository")
 @EnableDiscoveryClient
+@EnableConfigurationProperties(RsaProperties.class)
 public class BeverageServiceApplication {
 
 	public static void main(String[] args) {
