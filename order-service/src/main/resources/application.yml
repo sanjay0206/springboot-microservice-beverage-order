@@ -28,12 +28,6 @@ management:
     health:
       show-details: always
 
-logging:
-  level:
-    org:
-      springframework:
-        security: TRACE
-
 spring:
   security:
     oauth2:
@@ -41,3 +35,23 @@ spring:
         jwt:
           issuer-uri: http://localhost:8083/api/auth
           jwk-set-uri: http://localhost:8083/api/auth/.well-known/jwks.json
+
+
+## Kafka Producer Configuration:
+  kafka:
+    bootstrap-servers: localhost:9092
+    template:
+      default-topic: orderConfirmationTopic
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.type.mapping: event:com.infybuzz.event.OrderConfirmationEvent
+
+
+
+logging:
+  level:
+    org:
+      springframework:
+        security: TRACE

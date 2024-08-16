@@ -4,6 +4,7 @@ import com.infybuzz.entity.Order;
 import com.infybuzz.entity.OrderBeverage;
 import com.infybuzz.entity.OrderBeverageId;
 import com.infybuzz.entity.OrderStatus;
+import com.infybuzz.event.OrderConfirmationEvent;
 import com.infybuzz.exceptions.OrderServiceException;
 import com.infybuzz.exceptions.ResourceNotFoundException;
 import com.infybuzz.repository.OrderBeverageRepository;
@@ -17,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +42,9 @@ public class OrderService {
 
     @Autowired
     CommonService commonService;
+
+    @Autowired
+    KafkaTemplate<String, OrderConfirmationEvent> kafkaTemplate;
 
     public OrderResponse getById(long id) {
         logger.info("Inside getById = {}", id);
@@ -123,7 +128,15 @@ public class OrderService {
 
         // Update the total cost of the order
         savedOrder.setTotalCost(totalCost);
-        orderRepository.save(savedOrder);
+        savedOrder = orderRepository.save(savedOrder);
+
+
+        // Publish booking completed event to Order Confirmation Topic
+        OrderConfirmationEvent orderConfirmationEvent = new OrderConfirmationEvent(savedOrder.getOrderId(), savedOrder.getOrderStatus().name());
+        logger.info("Sending event to orderConfirmationTopic with event {}", orderConfirmationEvent);
+
+        // Send the event using kafka template to orderConfirmationTopic
+        kafkaTemplate.send("orderConfirmationTopic", orderConfirmationEvent);
 
         OrderResponse orderResponse = new OrderResponse(savedOrder);
         orderResponse.setBeverages(beverages);
