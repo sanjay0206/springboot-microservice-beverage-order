@@ -13,10 +13,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,6 +31,8 @@ import java.util.Map;
 public class AuthController {
     Logger logger = LoggerFactory.getLogger(AuthController.class);
 
+    @Autowired
+    private AuthenticationManager authenticationManager;
 
     @Autowired
     private CustomUserDetailsService userDetailsService;
@@ -64,15 +67,20 @@ public class AuthController {
         logger.info("Generating tokens for user: {}", authRequest.getUsername());
 
         try {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(authRequest.getUsername());
-            List<SimpleGrantedAuthority> authorities = AuthUtils.convertToSimpleGrantedAuthorities(userDetails.getAuthorities());
-            Map<String, String> tokens = tokenService.generateAccessAndRefreshTokens(authRequest.getUsername(), authorities);
-
-            return ResponseEntity.ok(tokens);
-        } catch (BadCredentialsException | UsernameNotFoundException e) {
-            return ResponseEntity.status(401).body(Map.of("error", "Authentication failed"));
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(authRequest.getUsername(), authRequest.getPassword())
+            );
+        } catch (BadCredentialsException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Incorrect username or password"));
         }
+
+        final UserDetails userDetails = userDetailsService.loadUserByUsername(authRequest.getUsername());
+        List<SimpleGrantedAuthority> authorities = AuthUtils.convertToSimpleGrantedAuthorities(userDetails.getAuthorities());
+        Map<String, String> tokens = tokenService.generateAccessAndRefreshTokens(authRequest.getUsername(), authorities);
+
+        return ResponseEntity.ok(tokens);
     }
+
     @PostMapping("/refresh-token")
     public ResponseEntity<Map<String, String>> refreshToken(@RequestBody RefreshTokenRequest refreshTokenRequest) {
         logger.info("Refreshing token");
@@ -81,10 +89,8 @@ public class AuthController {
             Map<String, String> refreshToken = tokenService.refreshToken(refreshTokenRequest.getRefreshToken());
             return ResponseEntity.ok(refreshToken);
         } catch (JOSEException | ParseException e) {
-            logger.error("Error refreshing token", e);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Invalid or expired refresh token"));
         } catch (RuntimeException e) {
-            logger.error("Token validation failed", e);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", e.getMessage()));
         }
     }
