@@ -4,6 +4,7 @@ logging:
       springframework:
         security: trace
 
+# Authorization Server
 spring:
   security:
     oauth2:
