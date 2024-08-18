@@ -109,6 +109,7 @@ public class TokenService {
 
         // Create JWS header with the key ID
         JWK jwk = jwkSet.getKeys().get(0);
+
         JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.RS256)
                 .keyID(jwk.getKeyID())
                 .type(JOSEObjectType.JWT)

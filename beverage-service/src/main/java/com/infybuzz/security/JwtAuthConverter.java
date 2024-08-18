@@ -14,6 +14,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -27,9 +28,8 @@ public class JwtAuthConverter implements Converter<Jwt, AbstractAuthenticationTo
 
     @Override
     public AbstractAuthenticationToken convert(@NonNull Jwt jwt) {
-        Collection<GrantedAuthority> authorities = Stream.concat(jwtGrantedAuthoritiesConverter.convert(jwt).stream(),
-                        extractResourceRoles(jwt).stream())
-                .collect(Collectors.toSet());
+
+        Collection<GrantedAuthority> authorities = new HashSet<>(extractResourceRoles(jwt));
         logger.info("authorities: " + authorities);
 
         return new JwtAuthenticationToken(jwt,  authorities, jwt.getClaimAsString("sub"));
