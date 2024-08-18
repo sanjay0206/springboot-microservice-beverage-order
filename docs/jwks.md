@@ -76,3 +76,35 @@ For RSA Keys
 
 ## 5. Verify the JWT Signature
 Use the constructed public key to verify the JWT’s signature.
+
+
+## JWT Validation Flow Hierarchy
+
+1. **SecurityConfig**
+    - Configures the security filter chain and sets up the OAuth2 resource server to handle JWT validation.
+
+    - Delegates to:
+
+2. **BearerTokenAuthenticationFilter**
+    - Extracts the Bearer token (JWT) from the `Authorization` header of incoming HTTP requests.
+
+    - Delegates to:
+
+3. **JwtAuthenticationProvider**
+    - Uses the `JwtDecoder` to validate the JWT token.
+    - If the token is valid, it creates a `JwtAuthenticationToken` which holds the authentication information.
+
+    - Utilizes:
+
+4. **JwtDecoder** (Interface)
+    - Responsible for decoding and verifying the JWT token.
+
+    - Common Implementation:
+
+    - **NimbusJwtDecoder**
+        - The default implementation provided by Spring Security for JWT validation.
+        - Fetches the public key from JWKS (JSON Web Key Set) if configured and uses it to verify the JWT's signature.
+
+5. **JwtAuthenticationToken**
+    - Represents the authenticated user after successful JWT validation.
+    - Populated with the claims extracted from the JWT, including roles and other authorities.
