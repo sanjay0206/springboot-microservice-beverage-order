@@ -49,9 +49,7 @@ public class TokenService {
             throws JOSEException {
 
         List<String> roles = AuthUtils.extractRoles(authorities);
-
         String accessToken = generateJwtToken(username, roles, ACCESS_TOKEN_EXPIRATION);
-
         String refreshToken = generateJwtToken(username, roles, REFRESH_TOKEN_EXPIRATION);
 
         return Map.of("accessToken", accessToken, "refreshToken", refreshToken);
@@ -67,9 +65,7 @@ public class TokenService {
         }
 
         String username = refreshTokenJwt.getJWTClaimsSet().getSubject();
-
         List<String> roles = AuthUtils.extractRoles(authorities);
-
         String refreshToken = generateJwtToken(username, roles, REFRESH_TOKEN_EXPIRATION);
 
         return Map.of("refreshToken", refreshToken);
