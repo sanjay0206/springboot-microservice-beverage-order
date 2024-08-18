@@ -8,16 +8,15 @@ import com.infybuzz.security.CustomUserDetailsService;
 import com.infybuzz.service.TokenService;
 import com.infybuzz.utils.AuthUtils;
 import com.nimbusds.jose.JOSEException;
-import com.nimbusds.jwt.SignedJWT;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -39,9 +38,6 @@ public class AuthController {
     private UserCredRepository repository;
 
     @Autowired
-    private AuthenticationManager authenticationManager;
-
-    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -54,51 +50,43 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public UserCredEntity registerUser(@RequestBody UserCredEntity user) {
+    public ResponseEntity<UserCredEntity> registerUser(@RequestBody UserCredEntity user) {
         logger.info("Registering new user: " + user);
 
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         user.setCreatedAt(LocalDateTime.now());
 
-        return repository.save(user);
+        return ResponseEntity.ok(repository.save(user));
     }
 
     @PostMapping("/token")
-    public Map<String, String> generateTokens(@RequestBody AuthRequest authRequest) throws JOSEException {
+    public ResponseEntity<Map<String, String>> generateTokens(@RequestBody AuthRequest authRequest) throws JOSEException {
         logger.info("Generating tokens for user: {}", authRequest.getUsername());
 
-        UserDetails userDetails = userDetailsService.loadUserByUsername(authRequest.getUsername());
-        authenticateUser(authRequest.getUsername(), authRequest.getPassword(), userDetails);
+        try {
+            UserDetails userDetails = userDetailsService.loadUserByUsername(authRequest.getUsername());
+            List<SimpleGrantedAuthority> authorities = AuthUtils.convertToSimpleGrantedAuthorities(userDetails.getAuthorities());
+            Map<String, String> tokens = tokenService.generateAccessAndRefreshTokens(authRequest.getUsername(), authorities);
 
-        List<SimpleGrantedAuthority> authorities = AuthUtils.convertToSimpleGrantedAuthorities(userDetails.getAuthorities());
-        return tokenService.generateAccessAndRefreshTokens(authRequest.getUsername(), authorities);
+            return ResponseEntity.ok(tokens);
+        } catch (BadCredentialsException | UsernameNotFoundException e) {
+            return ResponseEntity.status(401).body(Map.of("error", "Authentication failed"));
+        }
     }
-
     @PostMapping("/refresh-token")
-    public Map<String, String> refreshToken(@RequestBody RefreshTokenRequest refreshTokenRequest) throws JOSEException, ParseException {
+    public ResponseEntity<Map<String, String>> refreshToken(@RequestBody RefreshTokenRequest refreshTokenRequest) {
         logger.info("Refreshing token");
 
-        SignedJWT signedJWT = SignedJWT.parse(refreshTokenRequest.getRefreshToken());
-        String username = signedJWT.getJWTClaimsSet().getSubject();
-        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-        authenticateUser(username, userDetails.getPassword(), userDetails);
-
-        List<SimpleGrantedAuthority> authorities = AuthUtils.convertToSimpleGrantedAuthorities(userDetails.getAuthorities());
-        return tokenService.generateNewRefreshToken(signedJWT, authorities);
-    }
-
-    private void authenticateUser(String username, String password, UserDetails userDetails) {
-        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
-                username,
-                password,
-                userDetails.getAuthorities()
-        );
-
-        Authentication authentication = authenticationManager.authenticate(authenticationToken);
-        if (!authentication.isAuthenticated()) {
-            throw new RuntimeException("Authentication failed");
+        try {
+            Map<String, String> refreshToken = tokenService.refreshToken(refreshTokenRequest.getRefreshToken());
+            return ResponseEntity.ok(refreshToken);
+        } catch (JOSEException | ParseException e) {
+            logger.error("Error refreshing token", e);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Invalid or expired refresh token"));
+        } catch (RuntimeException e) {
+            logger.error("Token validation failed", e);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", e.getMessage()));
         }
-
-        SecurityContextHolder.getContext().setAuthentication(authentication);
     }
+
 }

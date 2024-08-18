@@ -6,6 +6,7 @@ import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jwt.JWTClaimsSet;
@@ -18,6 +19,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
 
 import java.security.KeyPair;
+import java.security.interfaces.RSAPublicKey;
 import java.text.ParseException;
 import java.time.Instant;
 import java.util.Date;
@@ -55,20 +57,35 @@ public class TokenService {
         return Map.of("accessToken", accessToken, "refreshToken", refreshToken);
     }
 
-    public  Map<String, String> generateNewRefreshToken(SignedJWT refreshTokenJwt, List<SimpleGrantedAuthority> authorities)
-            throws JOSEException, ParseException {
+    public Map<String, String> refreshToken(String refreshTokenString) throws JOSEException, ParseException {
+        SignedJWT signedJWT = SignedJWT.parse(refreshTokenString);
+        JWTClaimsSet claimsSet = signedJWT.getJWTClaimsSet();
 
-        Date expirationTime = refreshTokenJwt.getJWTClaimsSet().getExpirationTime();
+        String username = claimsSet.getSubject();
+        Date expirationTime = claimsSet.getExpirationTime();
 
+        // Validate the token
         if (isTokenExpired(expirationTime)) {
             throw new RuntimeException("Refresh token has expired. Please log in again.");
         }
 
-        String username = refreshTokenJwt.getJWTClaimsSet().getSubject();
-        List<String> roles = AuthUtils.extractRoles(authorities);
-        String refreshToken = generateJwtToken(username, roles, REFRESH_TOKEN_EXPIRATION);
+        // Verify the token
+        String keyId = signedJWT.getHeader().getKeyID();
+        JWK jwk = jwkSet.getKeyByKeyId(keyId);
+        if (jwk == null) {
+            throw new RuntimeException("Invalid key ID");
+        }
 
-        return Map.of("refreshToken", refreshToken);
+        RSAPublicKey publicKey = (RSAPublicKey) jwk.toRSAKey().toPublicKey();
+        RSASSAVerifier verifier = new RSASSAVerifier(publicKey);
+        if (!signedJWT.verify(verifier)) {
+            throw new RuntimeException("Invalid refresh token");
+        }
+
+        List<String> roles = claimsSet.getStringListClaim("roles");
+        String newRefreshToken = generateJwtToken(username, roles, REFRESH_TOKEN_EXPIRATION);
+
+        return Map.of("refreshToken", newRefreshToken);
     }
 
     private boolean isTokenExpired(Date expirationTime) {
@@ -79,9 +96,6 @@ public class TokenService {
 
         Date now = Date.from(Instant.now());
         Date expiration = Date.from(Instant.now().plusSeconds(expirationTime));
-
-        logger.info("Current Time: " + now);
-        logger.info("Expiration Time: " + expiration);
 
         // Define JWT Claims
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
@@ -108,4 +122,5 @@ public class TokenService {
         // Serialize the JWT to a compact form
         return signedJWT.serialize();
     }
+
 }
