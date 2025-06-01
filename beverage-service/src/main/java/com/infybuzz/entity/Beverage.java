@@ -39,5 +39,4 @@ public class Beverage {
 
 	@Column(name = "modifiedAt")
 	private LocalDateTime modifiedAt;
-
 }

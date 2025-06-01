@@ -22,5 +22,4 @@ public class OrderBeverage {
 
     @Column(name = "quantity")
     private Integer quantity;
-
 }

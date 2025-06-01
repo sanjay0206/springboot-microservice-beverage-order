@@ -8,7 +8,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class OrderConfirmationEvent {
-
     private Long orderId;
     private String orderStatus;
 }

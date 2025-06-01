@@ -1,31 +1,70 @@
 package com.infybuzz.service;
 
 import com.infybuzz.entity.Beverage;
+import com.infybuzz.entity.BeverageType;
 import com.infybuzz.repository.BeverageRepository;
 import com.infybuzz.request.CreateBeverageRequest;
+import com.infybuzz.response.PagedBeverageResponse;
 import jakarta.transaction.Transactional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Service
+@Slf4j
 public class BeverageService {
-	Logger logger = LoggerFactory.getLogger(BeverageService.class);
-	
-	@Autowired
-	BeverageRepository beverageRepository;
 
-	public Beverage getById(long id) {
-		logger.info("Inside getById " + id);
+	private final BeverageRepository beverageRepository;
+
+	@Autowired
+    public BeverageService(BeverageRepository beverageRepository) {
+        this.beverageRepository = beverageRepository;
+    }
+
+    public Beverage getById(long id) {
+        log.info("Inside getById {}", id);
 		return beverageRepository.findById(id).orElse(null);
 	}
 
-	public List<Beverage> getAllBeverages() {
-		return beverageRepository.findAll();
+	public PagedBeverageResponse getBeverages(int pageNo, int pageSize) {
+		int pageIndex = Math.max(0, pageNo - 1);
+		Pageable pageable = PageRequest.of(pageIndex, pageSize);
+		Page<Beverage> beveragePage = beverageRepository.findAll(pageable);
+
+		return new PagedBeverageResponse(
+				beveragePage.getContent(),
+				beveragePage.getNumber() + 1,
+				beveragePage.getSize(),
+				beveragePage.getTotalElements(),
+				beveragePage.getTotalPages(),
+				beveragePage.isLast()
+		);
+	}
+
+	public PagedBeverageResponse searchBeverages(String query,
+												 Long beverageId,
+												 String beverageName,
+												 Double beverageCost,
+												 BeverageType beverageType,
+												 Integer availability,
+												 Pageable pageable) {
+		Specification<Beverage> spec = BeverageSpecification.search(query, beverageId, beverageName, beverageCost, beverageType, availability);
+		Page<Beverage> beveragePage = beverageRepository.findAll(spec, pageable);
+
+		return new PagedBeverageResponse(
+				beveragePage.getContent(),
+				beveragePage.getNumber() + 1,
+				beveragePage.getSize(),
+				beveragePage.getTotalElements(),
+				beveragePage.getTotalPages(),
+				beveragePage.isLast()
+		);
 	}
 
 	public Beverage createBeverage(CreateBeverageRequest createBeverageRequest) {
@@ -43,12 +82,13 @@ public class BeverageService {
 
 	@Transactional
 	public void updateBeverageAvailability(long id, int quantity) {
-		logger.info("Inside updateBeverageAvailability | beverageId = " + id + " quantity = " + quantity);
+		log.info("Inside updateBeverageAvailability | beverageId = {} quantity = {}", id, quantity);
 		Beverage existingBeverage = beverageRepository.findById(id)
 				.orElseThrow(() -> new RuntimeException("Beverage not found"));
 
 		int updatedAvailability = existingBeverage.getAvailability() - quantity;
-		logger.info("existingAvailability = " + existingBeverage.getAvailability()  + " updatedAvailability = " + updatedAvailability);
+		log.info("existingAvailability = {} updatedAvailability = {}",
+				existingBeverage.getAvailability(), updatedAvailability);
 
 		existingBeverage.setAvailability(updatedAvailability);
 		existingBeverage.setModifiedAt(LocalDateTime.now());
@@ -56,8 +96,9 @@ public class BeverageService {
 
 	@Transactional
 	public Beverage updateBeverage(Long id, CreateBeverageRequest createBeverageRequest) {
-		logger.info("Inside updateBeverage " + id + " " + createBeverageRequest);
-		Beverage existingBeverage = beverageRepository.findById(id).orElseThrow(() -> new RuntimeException("Beverage not found"));
+		log.info("Inside updateBeverage {} {}", id, createBeverageRequest);
+		Beverage existingBeverage = beverageRepository.findById(id)
+				.orElseThrow(() -> new RuntimeException("Beverage not found"));
 
 		if (createBeverageRequest.getBeverageName() != null) {
 			existingBeverage.setBeverageName(createBeverageRequest.getBeverageName());
@@ -76,7 +117,7 @@ public class BeverageService {
 	}
 
 	public void deleteBeverage(Long id) {
-		logger.info("Inside deleteRecipe " + id);
+		log.info("Inside deleteRecipe {}", id);
 		if (!beverageRepository.existsById(id)) {
 			throw new IllegalStateException("Beverage not found.");
 		}

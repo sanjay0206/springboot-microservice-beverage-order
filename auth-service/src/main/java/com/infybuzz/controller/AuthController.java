@@ -1,98 +1,65 @@
 package com.infybuzz.controller;
 
-import com.infybuzz.entity.UserCredEntity;
-import com.infybuzz.repository.UserCredRepository;
 import com.infybuzz.request.AuthRequest;
 import com.infybuzz.request.RefreshTokenRequest;
-import com.infybuzz.security.CustomUserDetailsService;
-import com.infybuzz.service.TokenService;
-import com.infybuzz.utils.AuthUtils;
+import com.infybuzz.request.UserRequest;
+import com.infybuzz.service.AuthService;
 import com.nimbusds.jose.JOSEException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.text.ParseException;
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
+@Slf4j
 public class AuthController {
-    Logger logger = LoggerFactory.getLogger(AuthController.class);
 
-    @Autowired
-    private AuthenticationManager authenticationManager;
+    private final AuthenticationManager authenticationManager;
+    private final AuthService authService;
 
-    @Autowired
-    private CustomUserDetailsService userDetailsService;
-
-    @Autowired
-    private UserCredRepository repository;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    @Autowired
-    private TokenService tokenService;
+    public AuthController(AuthenticationManager authenticationManager, AuthService authService) {
+        this.authenticationManager = authenticationManager;
+        this.authService = authService;
+    }
 
     @GetMapping("/.well-known/jwks.json")
     public Map<String, Object> getJwkSet() {
-        logger.info("Inside getJwkSet");
-        return tokenService.getJwkSet();
+        log.info("Inside getJwkSet");
+        return authService.getJwkSet();
     }
 
     @PostMapping("/register")
-    public ResponseEntity<UserCredEntity> registerUser(@RequestBody UserCredEntity user) {
-        logger.info("Registering new user: " + user);
+    public ResponseEntity<?> registerUser(@RequestBody UserRequest userRequest) {
+        log.info("Registering new user: {}", userRequest);
 
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
-        user.setCreatedAt(LocalDateTime.now());
-
-        return ResponseEntity.ok(repository.save(user));
+        return ResponseEntity.ok(authService.registerUser(userRequest));
     }
 
     @PostMapping("/token")
-    public ResponseEntity<Map<String, String>> generateTokens(@RequestBody AuthRequest authRequest) throws JOSEException {
-        logger.info("Generating tokens for user: {}", authRequest.getUsername());
+    public ResponseEntity<Map<String, Object>> generateToken(@RequestBody AuthRequest authRequest) throws JOSEException {
+        log.info("Generating tokens for user: {}", authRequest.getUsername());
 
-        try {
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(authRequest.getUsername(), authRequest.getPassword())
-            );
-        } catch (BadCredentialsException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Incorrect username or password"));
-        }
+        UsernamePasswordAuthenticationToken authenticationToken =
+                new UsernamePasswordAuthenticationToken(authRequest.getUsername(), authRequest.getPassword());
+        authenticationManager.authenticate(authenticationToken);
 
-        final UserDetails userDetails = userDetailsService.loadUserByUsername(authRequest.getUsername());
-        List<SimpleGrantedAuthority> authorities = AuthUtils.convertToSimpleGrantedAuthorities(userDetails.getAuthorities());
-        Map<String, String> tokens = tokenService.generateAccessAndRefreshTokens(authRequest.getUsername(), authorities);
+        Map<String, Object> accessToken = authService.getToken(authRequest.getUsername());
 
-        return ResponseEntity.ok(tokens);
+        return ResponseEntity.ok(accessToken);
     }
 
-    @PostMapping("/refresh-token")
-    public ResponseEntity<Map<String, String>> refreshToken(@RequestBody RefreshTokenRequest refreshTokenRequest) {
-        logger.info("Refreshing token");
+    @PostMapping("/refreshToken")
+    public ResponseEntity<Map<String, Object>> generateRefreshToken(@RequestBody RefreshTokenRequest refreshTokenRequest)
+            throws ParseException, JOSEException {
+        log.info("Refreshing token");
 
-        try {
-            Map<String, String> refreshToken = tokenService.refreshToken(refreshTokenRequest.getRefreshToken());
-            return ResponseEntity.ok(refreshToken);
-        } catch (JOSEException | ParseException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Invalid or expired refresh token"));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", e.getMessage()));
-        }
+        Map<String, Object> refreshToken = authService.getRefreshToken(refreshTokenRequest.getRefreshToken());
+
+        return ResponseEntity.ok(refreshToken);
     }
-
 }

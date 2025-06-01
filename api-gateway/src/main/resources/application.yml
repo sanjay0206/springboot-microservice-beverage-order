@@ -1,9 +1,3 @@
-logging:
-  level:
-    org:
-      springframework:
-        security: TRACE
-
 spring:
   cloud:
     gateway:
@@ -11,14 +5,29 @@ spring:
         - id: auth
           uri: lb://auth-service
           predicates:
-            - Path=/api/auth/**
+            - Path=/auth-service/api/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: authCircuitBreaker
+                fallbackUri: forward:/authServiceFallback
 
         - id: beverage
           uri: lb://beverage-service
           predicates:
-            - Path=/api/beverage/**
+            - Path=/beverage-service/api/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: beverageCircuitBreaker
+                fallbackUri: forward:/beverageServiceFallback
 
         - id: order
           uri: lb://order-service
           predicates:
-            - Path=/api/order/**
+            - Path=/order-service/api/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: orderCircuitBreaker
+                fallbackUri: forward:/orderServiceFallback

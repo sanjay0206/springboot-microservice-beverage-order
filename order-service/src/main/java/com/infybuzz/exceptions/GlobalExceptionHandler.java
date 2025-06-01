@@ -1,6 +1,5 @@
 package com.infybuzz.exceptions;
 
-import com.infybuzz.response.ErrorDetailsResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,7 +26,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .details(webRequest.getDescription(false))
                 .build();
 
-        log.info("ErrorDetailsResponse: " + errorDetails);
         return new ResponseEntity<>(errorDetails, HttpStatus.NOT_FOUND);
     }
 
@@ -42,8 +40,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .details(webRequest.getDescription(false))
                 .build();
 
-        log.info("ErrorDetailsResponse: " + errorDetails);
-        return new ResponseEntity<>(errorDetails, HttpStatus.UNPROCESSABLE_ENTITY);
+        return new ResponseEntity<>(errorDetails, exception.getStatus());
     }
 
     // handle Unauthorized exceptions
@@ -58,7 +55,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .details(webRequest.getDescription(false))
                 .build();
 
-        log.info("ErrorDetailsResponse: " + errorDetails);
         return new ResponseEntity<>(errorDetails, HttpStatus.UNAUTHORIZED);
     }
 
@@ -74,7 +70,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .details(webRequest.getDescription(false))
                 .build();
 
-        log.info("ErrorDetailsResponse: " + errorDetails);
         return new ResponseEntity<>(errorDetails, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

@@ -1,8 +1,9 @@
 package com.infybuzz.app;
 
 import com.infybuzz.entity.Role;
-import com.infybuzz.entity.UserCredEntity;
-import com.infybuzz.repository.UserCredRepository;
+import com.infybuzz.entity.UserEntity;
+import com.infybuzz.repository.RoleRepository;
+import com.infybuzz.repository.UserRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -16,10 +17,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 @SpringBootApplication
-@ComponentScan({"com.infybuzz.controller", "com.infybuzz.service", "com.infybuzz.security"})
+@ComponentScan({"com.infybuzz.controller", "com.infybuzz.service", "com.infybuzz.security",
+		"com.infybuzz.exceptions", "com.infybuzz.config"})
 @EntityScan("com.infybuzz.entity")
 @EnableJpaRepositories("com.infybuzz.repository")
 @EnableDiscoveryClient
@@ -30,16 +33,21 @@ public class AuthServiceApplication {
 	}
 
 	@Bean
-	CommandLineRunner commandLineRunner (UserCredRepository userCredRepository) {
+	CommandLineRunner commandLineRunner (UserRepository userRepository,
+										 RoleRepository roleRepository) {
 		return args -> {
 
 			PasswordEncoder encoder = new BCryptPasswordEncoder();
-			List<UserCredEntity> users = new ArrayList<>();
-			users.add(new UserCredEntity("john_doe", "john@gmail.com", encoder.encode("john123"), Role.USER, LocalDateTime.now()));
-			users.add(new UserCredEntity("shop_owner", "owner@admin.com", encoder.encode("owner123"), Role.SHOP_OWNER, LocalDateTime.now()));
-			users.add(new UserCredEntity("alice_smith", "alice@gmail.com", encoder.encode("alice123"), Role.USER, LocalDateTime.now()));
+			Role userRole = new Role("USER");
+			Role shopOwnerRole = new Role("SHOP_OWNER");
+			roleRepository.saveAll(Arrays.asList(userRole, shopOwnerRole));
 
-			userCredRepository.saveAll(users);
+			List<UserEntity> users = new ArrayList<>();
+			users.add(new UserEntity("john_doe", "john@gmail.com", encoder.encode("john123"), List.of(userRole) , LocalDateTime.now()));
+			users.add(new UserEntity("shop_owner", "owner@admin.com", encoder.encode("owner123"), List.of(shopOwnerRole), LocalDateTime.now()));
+			users.add(new UserEntity("alice_smith", "alice@gmail.com", encoder.encode("alice123"), List.of(userRole), LocalDateTime.now()));
+
+			userRepository.saveAll(users);
 		};
 	}
 }

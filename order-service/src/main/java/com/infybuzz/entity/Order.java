@@ -33,5 +33,4 @@ public class Order {
 
     @Column(name = "order_date", updatable = false)
     private LocalDateTime orderDate;
-
 }

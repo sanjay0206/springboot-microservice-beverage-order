@@ -19,7 +19,8 @@ import java.util.Arrays;
 import java.util.List;
 
 @SpringBootApplication
-@ComponentScan({"com.infybuzz.controller", "com.infybuzz.service", "com.infybuzz.security"})
+@ComponentScan({"com.infybuzz.controller", "com.infybuzz.service", "com.infybuzz.security",
+		"com.infybuzz.request", "com.infybuzz.response"})
 @EntityScan("com.infybuzz.entity")
 @EnableJpaRepositories("com.infybuzz.repository")
 @EnableDiscoveryClient
@@ -72,7 +73,6 @@ public class BeverageServiceApplication {
 
 			List<Beverage> beverages = Arrays.asList(espresso, greenTea, cola, appleJuice);
 			beverageRepository.saveAll(beverages);
-
 		};
 	}
 }

@@ -1,14 +1,16 @@
 package com.infybuzz.exceptions;
 
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.http.HttpStatus;
 
 @Getter
 @Setter
-@AllArgsConstructor
-public class OrderServiceException extends IllegalStateException {
+public class OrderServiceException extends RuntimeException {
     private HttpStatus status;
-    private String message;
+
+    public OrderServiceException(HttpStatus status, String message) {
+        super(message);
+        this.status = status;
+    }
 }

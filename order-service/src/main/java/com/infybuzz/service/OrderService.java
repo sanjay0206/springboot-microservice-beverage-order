@@ -7,6 +7,7 @@ import com.infybuzz.entity.OrderStatus;
 import com.infybuzz.event.OrderConfirmationEvent;
 import com.infybuzz.exceptions.OrderServiceException;
 import com.infybuzz.exceptions.ResourceNotFoundException;
+import com.infybuzz.external.client.BeverageFeignClient;
 import com.infybuzz.repository.OrderBeverageRepository;
 import com.infybuzz.repository.OrderRepository;
 import com.infybuzz.request.BeverageRequest;
@@ -14,9 +15,12 @@ import com.infybuzz.request.CreateOrderRequest;
 import com.infybuzz.response.BeverageResponse;
 import com.infybuzz.response.OrderResponse;
 import com.infybuzz.response.OrderStatusResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.infybuzz.response.PagedOrderResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -31,23 +35,28 @@ import java.util.Objects;
 import static com.infybuzz.entity.OrderStatus.*;
 
 @Service
+@Slf4j
 public class OrderService {
-    Logger logger = LoggerFactory.getLogger(OrderService.class);
+
+    private final OrderRepository orderRepository;
+    private final OrderBeverageRepository orderBeverageRepository;
+    private final BeverageFeignClient beverageFeignClient;
+    private final KafkaTemplate<String, OrderConfirmationEvent> kafkaTemplate;
 
     @Autowired
-    OrderRepository orderRepository;
-
-    @Autowired
-    OrderBeverageRepository orderBeverageRepository;
-
-    @Autowired
-    CommonService commonService;
-
-    @Autowired
-    KafkaTemplate<String, OrderConfirmationEvent> kafkaTemplate;
+    public OrderService(OrderRepository orderRepository,
+                        OrderBeverageRepository orderBeverageRepository,
+                        BeverageFeignClient beverageFeignClient,
+                        KafkaTemplate<String, OrderConfirmationEvent> kafkaTemplate) {
+        this.orderRepository = orderRepository;
+        this.orderBeverageRepository = orderBeverageRepository;
+        this.beverageFeignClient = beverageFeignClient;
+        this.kafkaTemplate = kafkaTemplate;
+    }
 
     public OrderResponse getById(long id) {
-        logger.info("Inside getById = {}", id);
+        log.info("Inside getById = {}", id);
+
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "orderId", id));
 
@@ -57,7 +66,7 @@ public class OrderService {
 
         // Retrieve beverage details for each OrderBeverage
         for (OrderBeverage orderBeverage : orderBeverages) {
-            BeverageResponse beverageResponse = commonService.getBeverageById(orderBeverage.getId().getBeverageId());
+            BeverageResponse beverageResponse = beverageFeignClient.getById(orderBeverage.getId().getBeverageId());
             beverageResponses.add(beverageResponse);
         }
 
@@ -66,29 +75,41 @@ public class OrderService {
         return orderResponse;
     }
 
-    public List<OrderResponse> getAllOrders() {
-        logger.info("Fetching all orders");
-        List<Order> orders = orderRepository.findAll();
+    public PagedOrderResponse getAllOrders(int pageNo, int pageSize) {
+        log.info("Fetching all orders");
+
+        int pageIndex = Math.max(0, pageNo - 1);
+        Pageable pageable = PageRequest.of(pageIndex, pageSize);
+        Page<Order> orderPage = orderRepository.findAll(pageable);
 
         List<OrderResponse> orderResponses = new ArrayList<>();
-        for (Order order : orders) {
+        for (Order order : orderPage.getContent()) {
             List<OrderBeverage> orderBeverages = orderBeverageRepository.findByOrderId(order.getOrderId());
             List<BeverageResponse> beverageResponses = new ArrayList<>();
 
             for (OrderBeverage orderBeverage : orderBeverages) {
-                BeverageResponse beverageResponse = commonService.getBeverageById(orderBeverage.getId().getBeverageId());
+                BeverageResponse beverageResponse = beverageFeignClient.getById(orderBeverage.getId().getBeverageId());
                 beverageResponses.add(beverageResponse);
             }
+
             OrderResponse orderResponse = new OrderResponse(order);
             orderResponse.setBeverages(beverageResponses);
             orderResponses.add(orderResponse);
         }
-        return orderResponses;
+
+        return new PagedOrderResponse(
+                orderResponses,
+                orderPage.getNumber() + 1,
+                orderPage.getSize(),
+                orderPage.getTotalElements(),
+                orderPage.getTotalPages(),
+                orderPage.isLast()
+        );
     }
 
     @Transactional(rollbackFor = { SQLException.class })
     public OrderResponse placeOrder(CreateOrderRequest createOrderRequest) {
-        logger.info("Inside placeOrder = " + createOrderRequest);
+        log.info("Inside placeOrder = {}", createOrderRequest);
 
         Order order = new Order();
         order.setUserId(createOrderRequest.getUserId());
@@ -100,19 +121,22 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
         List<BeverageResponse> beverages = new ArrayList<>();
         double totalCost = 0.0;
+
         for (BeverageRequest beverage : createOrderRequest.getBeverages()) {
+            BeverageResponse beverageResponse = beverageFeignClient.getById(beverage.getBeverageId());
+            log.info("Quantity = {} | Beverage = {}", beverage.getQuantity(), beverageResponse);
 
-            BeverageResponse beverageResponse = commonService.getBeverageById(beverage.getBeverageId());
-            logger.info("Quantity = " + beverage.getQuantity() + " | Beverage = " + beverageResponse);
-
-            // If the requested quantity exceeds the available stock, throw an exception
-            if (beverageResponse.getAvailability() - beverage.getQuantity() < 0) {
-                throw new OrderServiceException(HttpStatus.UNPROCESSABLE_ENTITY,
+            // Check if requested quantity exceeds the available stock
+            int availableStock = beverageResponse.getAvailability();
+            int requestedQuantity = beverage.getQuantity();
+            if (availableStock - requestedQuantity < 0) {
+                throw new OrderServiceException(
+                        HttpStatus.UNPROCESSABLE_ENTITY,
                         "Insufficient availability for beverage ID: " + beverage.getBeverageId());
             }
 
             // Calculate total cost
-            totalCost += beverageResponse.getBeverageCost() * beverage.getQuantity();
+            totalCost = (totalCost + beverageResponse.getBeverageCost()) * beverage.getQuantity();
             beverages.add(beverageResponse);
 
             // Create and save OrderBeverage entity
@@ -121,22 +145,23 @@ public class OrderService {
             orderBeverage.setQuantity(beverage.getQuantity());
             orderBeverageRepository.save(orderBeverage);
 
-            // Update the available quantity in the Beverage entity through the Beverage service
-            commonService.updateBeverageAvailability(beverage.getBeverageId(), beverage.getQuantity());
+            // Update the available quantity of beverages
+            beverageFeignClient.updateBeverageAvailability(beverage.getBeverageId(), beverage.getQuantity());
         }
-        logger.info("totalCost = " + totalCost);
+        log.info("totalCost = {}", totalCost);
 
         // Update the total cost of the order
         savedOrder.setTotalCost(totalCost);
         savedOrder = orderRepository.save(savedOrder);
 
-
-        // Publish booking completed event to Order Confirmation Topic
-        OrderConfirmationEvent orderConfirmationEvent = new OrderConfirmationEvent(savedOrder.getOrderId(), savedOrder.getOrderStatus().name());
-        logger.info("Sending event to orderConfirmationTopic with event {}", orderConfirmationEvent);
-
-        // Send the event using kafka template to orderConfirmationTopic
-        kafkaTemplate.send("orderConfirmationTopic", orderConfirmationEvent);
+        // Publish booking completed event to orderConfirmationTopic
+//        OrderConfirmationEvent orderConfirmationEvent = new OrderConfirmationEvent(
+//                savedOrder.getOrderId(),
+//                savedOrder.getOrderStatus().name());
+//        log.info("Sending event to orderConfirmationTopic with event {}", orderConfirmationEvent);
+//
+//        // Send the event using kafka template to orderConfirmationTopic
+//        kafkaTemplate.send("orderConfirmationTopic", orderConfirmationEvent);
 
         OrderResponse orderResponse = new OrderResponse(savedOrder);
         orderResponse.setBeverages(beverages);
@@ -145,7 +170,7 @@ public class OrderService {
 
     @Transactional
     public OrderStatusResponse updateOrderStatus(long id, OrderStatus newOrderStatus) {
-        logger.info("Inside updateOrder = " + id);
+        log.info("Inside updateOrder = {}", id);
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "orderId", id));
 
@@ -157,7 +182,7 @@ public class OrderService {
     }
 
     public void deleteOrder(Long id) {
-        logger.info("Inside deleteOrder " + id);
+        log.info("Inside deleteOrder {}", id);
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "orderId", id));
 
@@ -168,17 +193,17 @@ public class OrderService {
         OrderStatus currentOrderStatus = orderRepository.findById(id)
                 .map(Order::getOrderStatus)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "orderId",  id));
-        logger.info("currentOrderStatus = " + currentOrderStatus);
+        log.info("currentOrderStatus = {}", currentOrderStatus);
 
-        switch (currentOrderStatus) {
-            case PREPARING:
-                return Objects.equals(newOrderStatus, SERVED.name()) || Objects.equals(newOrderStatus, CANCELLED.name());
-            case SERVED:
-                return !Objects.equals(newOrderStatus, CANCELLED.name());
-            case CANCELLED:
-                return false;
-            default:
-                return true;
-        }
+        return switch (currentOrderStatus) {
+            // Can transition from PREPARING to SERVED or CANCELLED
+            case PREPARING -> Objects.equals(newOrderStatus, SERVED.name()) || Objects.equals(newOrderStatus, CANCELLED.name());
+
+            // No further transitions allowed from SERVED except remaining as SERVED
+            case SERVED -> Objects.equals(newOrderStatus, SERVED.name());
+
+            // Cannot transition from CANCELLED to any other state
+            case CANCELLED -> false;
+        };
     }
 }

@@ -1,7 +1,6 @@
 package com.infybuzz.security;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,11 +13,15 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 @EnableMethodSecurity(prePostEnabled = true)
 @EnableWebSecurity
+@Slf4j
 public class ResourceConfig {
-    Logger logger = LoggerFactory.getLogger(ResourceConfig.class);
+
+    private final JwtAuthConverter jwtAuthConverter;
 
     @Autowired
-    private JwtAuthConverter jwtAuthConverter;
+    public ResourceConfig(JwtAuthConverter jwtAuthConverter) {
+        this.jwtAuthConverter = jwtAuthConverter;
+    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -27,8 +30,13 @@ public class ResourceConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
                 .authorizeHttpRequests(authReq -> authReq
-                        .requestMatchers("/actuator/**").permitAll()
-                        .requestMatchers("/eureka/**").permitAll()
+                        .requestMatchers("/actuator/**", "/eureka/**").permitAll()
+                        .requestMatchers("/v2/api-docs/**",
+                                "/v3/api-docs/**",
+                                "/swagger-resources/**",
+                                "/swagger-ui/**",
+                                "/webjars/**",
+                                "/swagger-ui.html").permitAll()
                         .anyRequest().authenticated())
 
                 .oauth2ResourceServer(oauth2 -> oauth2
@@ -39,5 +47,4 @@ public class ResourceConfig {
 
         return http.build();
     }
-
 }

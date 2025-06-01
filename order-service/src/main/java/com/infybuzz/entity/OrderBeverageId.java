@@ -22,5 +22,4 @@ public class OrderBeverageId implements Serializable {
 
     @Column(name = "beverage_id")
     private Long beverageId;
-
 }
